@@ -1,0 +1,76 @@
+groups:
+  - name: weather-platform
+    rules:
+      - alert: InstanceDown
+        expr: up{job=~"node|cadvisor|collector|postgres"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "{{ $labels.job }} {{ $labels.instance }} недоступний"}
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "PostgreSQL не відповідає експортеру"}
+      - alert: WebReplicaDown
+        expr: up{job="web"} == 0
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: "Репліка {{ $labels.replica }} не відповідає"}
+      - alert: AllWebReplicasDown
+        expr: sum(up{job="web"}) == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Жодна репліка веб-застосунку не відповідає"}
+      - alert: SiteProbeFailed
+        expr: probe_success{job="blackbox_http"} == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Сайт не відповідає на {{ $labels.instance }}"}
+      - alert: HighCPU
+        expr: 100 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100 > 85
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "CPU > 85% на {{ $labels.host }}"}
+      - alert: LowMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: "Вільної пам'яті < 10% на {{ $labels.host }}"}
+      - alert: DiskAlmostFull
+        expr: node_filesystem_avail_bytes{mountpoint="/",fstype!="tmpfs"} / node_filesystem_size_bytes{mountpoint="/",fstype!="tmpfs"} < 0.15
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Диск заповнений > 85% на {{ $labels.host }}"}
+      - alert: WebHighLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(web_http_request_seconds_bucket{path="/api/weather"}[1m]))) > 0.8
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "p95 затримки /api/weather > 0.8 с"}
+      - alert: Web5xxRate
+        expr: sum(rate(web_http_requests_total{status=~"5.."}[1m])) / sum(rate(web_http_requests_total[1m])) > 0.05
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "Частка 5xx > 5%"}
+      - alert: DatabaseUnavailableForWeb
+        expr: min(web_db_up) == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Веб-застосунок не бачить БД (режим деградації)"}
+      - alert: WeatherDataStale
+        expr: time() - collector_last_success_timestamp_seconds > 1800
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "Нових даних погоди немає понад 30 хв"}
+      - alert: BackupStale
+        expr: time() - backup_last_success_timestamp_seconds > 5400
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Остання успішна резервна копія старша за 90 хв"}
+      - alert: BackupFailed
+        expr: backup_last_run_success == 0
+        labels: {severity: critical}
+        annotations: {summary: "Останній запуск резервного копіювання завершився помилкою"}
+      - alert: RestoreTestFailed
+        expr: restore_test_success == 0
+        labels: {severity: critical}
+        annotations: {summary: "Тест відновлення з копії не пройдено"}
